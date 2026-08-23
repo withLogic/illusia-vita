@@ -41,22 +41,32 @@ extern "C" {
 #endif
 
 typedef struct __attribute__((__packed__)) stat64_bionic {
-    unsigned long long st_dev;
-    unsigned char __pad0[4];
-    unsigned long __st_ino;
-    unsigned int st_mode;
-    nlink_t st_nlink;
-    uid_t st_uid;
-    gid_t st_gid;
-    unsigned long long st_rdev;
-    unsigned char __pad3[4];
-    long long st_size;
-    unsigned long st_blksize;
-    unsigned long long st_blocks;
-    struct timespec st_atim;
-    struct timespec st_mtim;
-    struct timespec st_ctim;
-    unsigned long long st_ino;
+    /*
+    this fixes the ability to load the save files and options file. 
+    fix was discovered by Claude for the Advena port by MetalSyntax 
+    and used here.
+    */
+    uint64_t st_dev;         // 0x00 (8 bytes)
+    uint32_t __pad0;         // 0x08 (4 bytes)
+    uint32_t __st_ino;       // 0x0C (4 bytes)
+    uint32_t st_mode;        // 0x10 (4 bytes)
+    uint32_t st_nlink;       // 0x14 (4 bytes) - explicit uint32_t (newlib nlink_t is 2 bytes!)
+    uint32_t st_uid;         // 0x18 (4 bytes) - explicit uint32_t (newlib uid_t is 2 bytes!)
+    uint32_t st_gid;         // 0x1C (4 bytes) - explicit uint32_t (newlib gid_t is 2 bytes!)
+    uint64_t st_rdev;        // 0x20 (8 bytes)
+    uint32_t __pad3;         // 0x28 (4 bytes)
+    uint32_t __pad4;         // 0x2C (4 bytes)
+    int64_t  st_size;        // 0x30 (8 bytes) - offset 0x30 (48 bytes) for Android Bionic 32-bit ABI
+    uint32_t st_blksize;     // 0x38 (4 bytes)
+    uint32_t __pad5;         // 0x3C (4 bytes)
+    uint64_t st_blocks;      // 0x40 (8 bytes)
+    uint32_t st_atime;       // 0x48 (4 bytes)
+    uint32_t st_atime_nsec;  // 0x4C (4 bytes)
+    uint32_t st_mtime;       // 0x50 (4 bytes)
+    uint32_t st_mtime_nsec;  // 0x54 (4 bytes)
+    uint32_t st_ctime;       // 0x58 (4 bytes)
+    uint32_t st_ctime_nsec;  // 0x5C (4 bytes)
+    uint64_t st_ino;         // 0x60 (8 bytes)
 } stat64_bionic;
 
 typedef struct __attribute__((__packed__)) dirent64_bionic {

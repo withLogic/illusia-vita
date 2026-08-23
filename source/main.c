@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include "utils/init.h"
 #include "utils/glutil.h"
 
@@ -20,11 +21,15 @@ int sceLibcHeapSize = 4 * 1024 * 1024;
 so_module so_mod;
 extern void *g_CMvApp_instance;
 extern void *g_CSaveMgr_instance;
+extern void settings_save();
 
 int gameHeight = 320;
 int gameWidth = 480;
 int screenHeight = 544;
 int screenWidth = 960;
+
+int desiredFrameRate = 22; // game speed slider supports the following: 10, 13, 16, 19, and 22 fps. default is going to cap at 22.
+uint64_t targetUs;
 
 void (*CMvApp_EvKeyPres)(void *this, void *event);
 void (*CMvApp_EvKeyRelease)(void *this, void *event);
@@ -50,7 +55,7 @@ static virtual_buttons current_dpad_direction = DPAD_NONE;
 
 static const int virtual_dpad_coordinates[11][2] = {
     { 0, 0 },       // DPAD_NONE
-    { 13,  231 },   // DPAD_LEFT
+    { 37,  252 },   // DPAD_LEFT
     { 128, 262 },   // DPAD_RIGHT
     { 86,  207 },   // DPAD_UP
     { 64,  293 },   // DPAD_DOWN
@@ -83,7 +88,14 @@ int main() {
     CMvApp_EvPointerRelease = (void *)so_symbol(&so_mod, "_ZN6CMvApp16EvPointerReleaseEP12GxPointerPos");
     CMvApp_EvPointerMove = (void *)so_symbol(&so_mod, "_ZN6CMvApp13EvPointerMoveEP12GxPointerPos");
 
+    targetUs = 1000000ULL / desiredFrameRate;
+
     JNI_OnLoad(&jvm);
+
+    FILE *configFile = fopen(DATA_PATH "config.txt", "r");
+    if(!configFile){
+        settings_save();
+    }
 
     audio_init();
     gl_init();
@@ -107,8 +119,16 @@ int main() {
 
     while (1) {
         controls_poll();
+
+        uint64_t frameStart = sceKernelGetProcessTimeWide();
         NativeRender(&jvm, NULL);
         gl_swap();
+
+        uint64_t elapsedUs = sceKernelGetProcessTimeWide() - frameStart;
+
+        if (elapsedUs < targetUs) {
+            sceKernelDelayThread((SceUInt)(targetUs - elapsedUs));
+        }
     }
     sceKernelExitDeleteThread(0);
 }

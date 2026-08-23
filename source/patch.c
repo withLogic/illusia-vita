@@ -27,11 +27,16 @@ static so_hook _ZN3CAI6UpdateEv_hook; // tick/tock ai -- i think this breaks the
 static so_hook _ZN20GVUIPlayerController4DrawEv_hook; // dont draw the hud
 static so_hook _ZN8CGsSound9PlaySoundEiih_hook; // audio bugs!
 static so_hook _ZN8CGsSound4StopEv_hook;
+static so_hook _ZN14CGsParticleMgr9UpdateAllEii_hook;
+
+static so_hook setFrameSpeed_hook;
 
 void *g_CMvApp_instance = NULL;
 void *g_CSaveMgr_instance = NULL;
 
 extern int settings_graphicsqualty;
+extern int desiredFrameRate;
+extern uint64_t targetUs;
 
 char frame = 0;
 
@@ -64,13 +69,25 @@ void _ZN20GVUIPlayerController4DrawEv_patched(void *this) {
 }
 
 void _ZN8CGsSound9PlaySoundEiih_patched(void *this, int param2, int param3, int param4) {
-    l_debug("_ZN8CGsSound9PlaySoundEiih_patched param2=%d, param3=%d, param4=%d");
+    l_debug("_ZN8CGsSound9PlaySoundEiih_patched param2=%d, param3=%d, param4=%d", param2, param3, param4);
     audio_play_sound(param2, param3, param4);
 }
 
 void _ZN8CGsSound4StopEv_patched(void *this) {
     audio_stop_sound();
 }
+
+int _ZN14CGsParticleMgr9UpdateAllEii_patched(int param1, int param2, int param3) {
+    l_debug("_ZN14CGsParticleMgr9UpdateAllEii_patched param1=%d, param2=%d, param3=%d", param1, param2, param3);
+    return SO_CONTINUE(int, _ZN14CGsParticleMgr9UpdateAllEii_hook, param1, param2, param3);
+}
+
+int setFrameSpeed_patched(int param1) {
+    l_debug("setFrameSpeed_patched param1=%d", param1);
+    desiredFrameRate = param1;
+    targetUs = 1000000ULL / desiredFrameRate;
+}
+
 
 void so_patch(void) {
     CMvAppC1Ev_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN6CMvAppC1Ev"),
@@ -95,4 +112,11 @@ void so_patch(void) {
 
     _ZN8CGsSound4StopEv_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN8CGsSound4StopEv"),
         (uintptr_t)&_ZN8CGsSound4StopEv_patched);
+
+    _ZN14CGsParticleMgr9UpdateAllEii_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN14CGsParticleMgr9UpdateAllEii"),
+        (uintptr_t)&_ZN14CGsParticleMgr9UpdateAllEii_patched);
+
+    setFrameSpeed_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "setFrameSpeed"),
+        (uintptr_t)&setFrameSpeed_patched);
+
 }
