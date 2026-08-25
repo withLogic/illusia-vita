@@ -1,5 +1,6 @@
 #include "reimpl/asset_manager.h"
 #include "utils/logger.h"
+#include "utils/asset_cache.h"
 
 #include <pthread.h>
 #include <malloc.h>
@@ -8,6 +9,8 @@
 #include <libc_bridge/libc_bridge.h>
 #include <string>
 #include <fcntl.h>
+
+#define ASSET_CACHE_MAX_FILE_SIZE (64 * 1024)
 
 typedef struct assetManager {
     int dummy = 0; // TODO: mb we will need to store something here in future
@@ -20,6 +23,8 @@ typedef struct aAsset {
     size_t bytesRead;
     size_t fileSize;
     bool opened = false;
+    CachedAsset *cached = nullptr;
+    size_t cachePos = 0;
 } asset;
 
 static AAssetManager * g_AAssetManager = nullptr;
@@ -34,6 +39,8 @@ AAssetManager * AAssetManager_create() {
     g_AAssetManager = (AAssetManager *) malloc(sizeof(assetManager));
     memcpy(g_AAssetManager, &am, sizeof(assetManager));
 
+    asset_cache_init(128, 4 * 1024 * 1024, 0);
+
     return g_AAssetManager;
 }
 
@@ -45,10 +52,20 @@ AAsset* AAssetManager_open(AAssetManager* mgr, const char* filename, int mode) {
     strcpy(a->filename, realp.c_str());
     a->bytesRead = 0;
 
+    CachedAsset *cached = asset_cache_acquire(a->filename);
+    if (cached) {
+        a->cached = cached;
+        a->cachePos = 0;
+        a->fileSize = cached->size;
+        a->opened = true;
+        l_debug("AAssetManager_open<%p>(%p, %s, %i): %p [cache hit]", __builtin_return_address(0), mgr, realp.c_str(), mode, a);
+        return (AAsset *) a;
+    }
+
 #ifdef USE_SCELIBC_IO
     a->f = sceLibcBridge_fopen((const char *)a->filename, "r");
 #else
-    a->f = fopen((cost char *)a->filename, "r");
+    a->f = fopen((const char *)a->filename, "r");
 #endif
 
     if (!a->f) {
@@ -66,6 +83,27 @@ AAsset* AAssetManager_open(AAssetManager* mgr, const char* filename, int mode) {
         fseek(a->f, 0, SEEK_SET);
 #endif
         a->opened = true;
+
+        if (a->fileSize > 0 && a->fileSize <= ASSET_CACHE_MAX_FILE_SIZE) {
+            void *buf = malloc(a->fileSize);
+            if (buf) {
+#ifdef USE_SCELIBC_IO
+                size_t got = sceLibcBridge_fread(buf, 1, a->fileSize, a->f);
+                sceLibcBridge_fseek(a->f, 0, SEEK_SET); // rewind for the normal read path
+#else
+                size_t got = fread(buf, 1, a->fileSize, a->f);
+                fseek(a->f, 0, SEEK_SET);
+#endif
+                if (got == a->fileSize) {
+                    if (!asset_cache_insert(a->filename, buf, a->fileSize)) {
+                        free(buf); // budget couldn't fit it right now; not fatal
+                    }
+                } else {
+                    free(buf);
+                }
+            }
+        }
+
     }
 
     l_debug("AAssetManager_open<%p>(%p, %s, %i): %p", __builtin_return_address(0), mgr, realp.c_str(), mode, a);
@@ -78,7 +116,9 @@ void AAsset_close(AAsset* asset) {
     if (asset) {
         auto * a = (aAsset *) asset;
         free(a->filename);
-        if (a->opened) {
+        if (a->cached) {
+            asset_cache_release(a->cached);
+        } else if (a->opened) {
 #ifdef USE_SCELIBC_IO
             sceLibcBridge_fclose(a->f);
 #else
@@ -100,6 +140,17 @@ int AAsset_read(AAsset* asset, void* buf, size_t count) {
 
     if (!a->opened) {
         return -1;
+    }
+
+    if (a->cached) {
+        size_t remaining = a->cached->size - a->cachePos;
+        size_t n = count < remaining ? count : remaining;
+        if (n > 0) {
+            memcpy(buf, (uint8_t *)a->cached->data + a->cachePos, n);
+            a->cachePos += n;
+            a->bytesRead += n;
+        }
+        return (int) n;
     }
 
 #ifdef USE_SCELIBC_IO
@@ -137,6 +188,21 @@ off_t AAsset_seek(AAsset* asset, off_t offset, int whence) {
         return -1;
     }
 
+    if (a->cached) {
+        long newPos;
+        switch (whence) {
+            case SEEK_SET: newPos = (long) offset; break;
+            case SEEK_CUR: newPos = (long) a->cachePos + offset; break;
+            case SEEK_END: newPos = (long) a->cached->size + offset; break;
+            default: return (off_t) -1;
+        }
+        if (newPos < 0 || (size_t) newPos > a->cached->size) {
+            return (off_t) -1;
+        }
+        a->cachePos = (size_t) newPos;
+        return 0; // matches the raw fseek()-return convention used below
+    }
+
 #ifdef USE_SCELIBC_IO
     auto ret = (off_t) sceLibcBridge_fseek(a->f, offset, whence);
 #else
@@ -156,6 +222,10 @@ off_t AAsset_getRemainingLength(AAsset* asset) {
 
     if (!a->opened) {
         return -1;
+    }
+
+    if (a->cached) {
+        return (off_t)(a->cached->size - a->cachePos);
     }
 
     return (off_t)(a->fileSize - a->bytesRead);
@@ -195,7 +265,10 @@ int AAsset_openFileDescriptor(AAsset* asset, off_t* outStart, off_t* outLength) 
     auto * a = (aAsset *) asset;
     if (outStart) *outStart = 0;
     if (outLength) *outLength = a->fileSize;
-    if (a->opened) {
+    if (a->cached) {
+        asset_cache_release(a->cached);
+        a->cached = nullptr;
+    } else if (a->opened) {
         if (a->opened) {
 #ifdef USE_SCELIBC_IO
             sceLibcBridge_fclose(a->f);
@@ -203,8 +276,10 @@ int AAsset_openFileDescriptor(AAsset* asset, off_t* outStart, off_t* outLength) 
             fclose(a->f);
 #endif
         }
-        a->opened = false;
     }
+
+    a->opened = false;
+
     int ret = open(a->filename, O_RDONLY);
     l_debug("AAsset_openFileDescriptor(%p/\"%s\", %p, %p): ret %i", asset, a->filename, outStart, outLength, ret);
     return ret;

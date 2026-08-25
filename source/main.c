@@ -7,7 +7,7 @@
 
 #include <falso_jni/FalsoJNI.h>
 #include <so_util/so_util.h>
-
+#include "utils/asset_cache.h"
 #include "reimpl/controls.h"
 
 #include "audio.h"
@@ -21,12 +21,15 @@ int sceLibcHeapSize = 4 * 1024 * 1024;
 so_module so_mod;
 extern void *g_CMvApp_instance;
 extern void *g_CSaveMgr_instance;
+extern void *g_CUITitle_instance;
 extern void settings_save();
 
 int gameHeight = 320;
 int gameWidth = 480;
 int screenHeight = 544;
 int screenWidth = 960;
+
+int titleMenuOption = 0;
 
 int desiredFrameRate = 22; // game speed slider supports the following: 10, 13, 16, 19, and 22 fps. default is going to cap at 22.
 uint64_t targetUs;
@@ -36,6 +39,7 @@ void (*CMvApp_EvKeyRelease)(void *this, void *event);
 void (*CMvApp_EvPointerPress)(void *this, void *event);
 void (*CMvApp_EvPointerRelease)(void *this, void *event);
 void (*CMvApp_EvPointerMove)(void *this, void *event);
+void (*CUITitle_ClickMenu)(void *this, int param1, int param2);
 
 typedef enum {
     DPAD_NONE,
@@ -58,7 +62,7 @@ static const int virtual_dpad_coordinates[11][2] = {
     { 37,  252 },   // DPAD_LEFT
     { 128, 262 },   // DPAD_RIGHT
     { 86,  207 },   // DPAD_UP
-    { 64,  293 },   // DPAD_DOWN
+    { 83,  309 },   // DPAD_DOWN
     { 195, 288 },   // SKILL_1
     { 242, 288 },   // SKILL_2
     { 283, 288 },   // SKILL_3
@@ -69,6 +73,7 @@ static const int virtual_dpad_coordinates[11][2] = {
 
 int main() {
 
+    asset_cache_init(128, 4 * 1024 * 1024, 0);
     soloader_init_all();
 
     int (*JNI_OnLoad)(void *jvm) = (void *)so_symbol(&so_mod, "JNI_OnLoad");
@@ -88,6 +93,8 @@ int main() {
     CMvApp_EvPointerRelease = (void *)so_symbol(&so_mod, "_ZN6CMvApp16EvPointerReleaseEP12GxPointerPos");
     CMvApp_EvPointerMove = (void *)so_symbol(&so_mod, "_ZN6CMvApp13EvPointerMoveEP12GxPointerPos");
 
+    CUITitle_ClickMenu = (void *)so_symbol(&so_mod, "_ZN8CUITitle9ClickMenuEib");
+
     targetUs = 1000000ULL / desiredFrameRate;
 
     JNI_OnLoad(&jvm);
@@ -96,6 +103,8 @@ int main() {
     if(!configFile){
         settings_save();
     }
+
+    asset_cache_init(128, 4 * 1024 * 1024, 0);
 
     audio_init();
     gl_init();
@@ -128,6 +137,7 @@ int main() {
 
         if (elapsedUs < targetUs) {
             sceKernelDelayThread((SceUInt)(targetUs - elapsedUs));
+            asset_cache_gc();
         }
     }
     sceKernelExitDeleteThread(0);
@@ -253,25 +263,6 @@ void controls_handler_analog(ControlsStickId which, float x, float y, ControlsAc
 
 int32_t vita_to_control(int32_t vita_button) {
     switch (vita_button) {
-        /*
-        -16	-- menu
-        -14	26
-        -13	25
-        -12	-- change skill bar
-        -11	21
-        -10	20
-        -8	19
-        -7	18
-        -6	17
-        -5	16
-        -4	-- jump right
-        -3	-- jump left
-        -2	-- change player
-        -1	12
-
-        // this isnt a great mapping since not all of the buttons are mapped properly. 
-
-        */
         case AKEYCODE_BUTTON_L1: return -2; 
         case AKEYCODE_BUTTON_R1: return -12; 
         case AKEYCODE_BUTTON_X: return -3;

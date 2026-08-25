@@ -21,6 +21,7 @@
 extern so_module so_mod;
 static so_hook CMvAppC1Ev_hook;
 static so_hook CSaveMgrC1Ev_hook;
+static so_hook CUITitleC1Ev_hook;
 
 static so_hook _ZN10CShadowMgr4DrawEv_hook; // disable the shadows
 static so_hook _ZN3CAI6UpdateEv_hook; // tick/tock ai -- i think this breaks the player ai?
@@ -30,9 +31,11 @@ static so_hook _ZN8CGsSound4StopEv_hook;
 static so_hook _ZN14CGsParticleMgr9UpdateAllEii_hook;
 
 static so_hook setFrameSpeed_hook;
+static so_hook _ZN15CScNetwork_20117ConnectEt_hook;
 
 void *g_CMvApp_instance = NULL;
 void *g_CSaveMgr_instance = NULL;
+void *g_CUITitle_instance = NULL;
 
 extern int settings_graphicsqualty;
 extern int desiredFrameRate;
@@ -51,6 +54,12 @@ void CSaveMgrC1Ev_patched(void *this, int param) {
     SO_CONTINUE(void *, CSaveMgrC1Ev_hook, this, param);
 }
 
+void CUITitleC1Ev_patched(void *this, int param) {
+    g_CUITitle_instance = this;
+    l_debug("CUITitleC1Ev::CSaveMgrC1Ev: Hooked into function");
+    SO_CONTINUE(void *, CUITitleC1Ev_hook, this, param);
+}
+    
 void _ZN10CShadowMgr4DrawEv_patched(void *this) {
     return;
 }
@@ -69,7 +78,7 @@ void _ZN20GVUIPlayerController4DrawEv_patched(void *this) {
 }
 
 void _ZN8CGsSound9PlaySoundEiih_patched(void *this, int param2, int param3, int param4) {
-    l_debug("_ZN8CGsSound9PlaySoundEiih_patched param2=%d, param3=%d, param4=%d", param2, param3, param4);
+    //l_debug("_ZN8CGsSound9PlaySoundEiih_patched param2=%d, param3=%d, param4=%d", param2, param3, param4);
     audio_play_sound(param2, param3, param4);
 }
 
@@ -88,6 +97,11 @@ int setFrameSpeed_patched(int param1) {
     targetUs = 1000000ULL / desiredFrameRate;
 }
 
+int _ZN15CScNetwork_20117ConnectEt_patched(int *this, int param1){
+    l_debug("_ZN15CScNetwork_20117ConnectEt_patched param1=%d", param1);
+    return SO_CONTINUE(int, _ZN15CScNetwork_20117ConnectEt_hook, this, param1);
+}
+
 
 void so_patch(void) {
     CMvAppC1Ev_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN6CMvAppC1Ev"),
@@ -95,6 +109,9 @@ void so_patch(void) {
 
     CSaveMgrC1Ev_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN8CSaveMgrC1Ev"),
         (uintptr_t)&CSaveMgrC1Ev_patched);
+
+    CUITitleC1Ev_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN8CUITitleC1Ev"),
+        (uintptr_t)&CUITitleC1Ev_patched);
 
     /*
     _ZN3CAI6UpdateEv_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN3CAI6UpdateEv"),
@@ -118,5 +135,8 @@ void so_patch(void) {
 
     setFrameSpeed_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "setFrameSpeed"),
         (uintptr_t)&setFrameSpeed_patched);
+
+    _ZN15CScNetwork_20117ConnectEt_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN15CScNetwork_20117ConnectEt"),
+        (uintptr_t)&_ZN15CScNetwork_20117ConnectEt_patched);
 
 }
