@@ -16,7 +16,7 @@ Like this port? Consider [buying me a coffee](https://ko-fi.com/withlogic)! Run 
 - The rest of the game maps the controls to the Vita's controller.
 - The game has 8 slots to assign skills and items. Two banks of four each on the left and right hand side of the screen. These skills are mapped to the right-joystick and you can use the R trigger to swap between the active skill bank.
 - The game's framerates default to 6, 9, 12, 15, and 18 frame a second. My implementation doubles this, so the speeds are 12, 18, 24, 30, and 36. I find that 24fps is the sweet spot.
-- Editing the config.txt file at ux0:/data/illusia/ yields three configuration options:
+- Editing the config.txt file at ux0:/data/illusia/ yields two configuration options:
     - CapFramerate, 0 or 1. This sets the framerate to 30fps.  
     - GraphicsQuality, 0, 1, 2. This sets the graphics quality setting. The game defaults to its lowest setting.
 
