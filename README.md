@@ -7,6 +7,8 @@ This is a wrapper/port of <b>Illusia</b> for the *PS Vita*.
 The port works by loading the Android ARMv6 executables from the Android release in memory, resolving their imports with native functions and patching it in order to properly run.
 By doing so, it's basically as if we emulate a minimalist Android environment in which we run natively the executables as they are.
 
+Like this port? Consider [buying me a coffee](https://ko-fi.com/withlogic)! Run into problems? Submit an issue.
+
 ## Notes
 
 - The loader has been tested with Illusia v1.0.2.
