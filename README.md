@@ -68,4 +68,4 @@ cmake .. && make
 - [TheFloW](https://github.com/TheOfficialFlow) for the original .so loader.
 - [Rinnegatamante](https://github.com/Rinnegatamante/) for VitaGL and other help with various Vita-related things
 - [gl33ntwine](https://github.com/v-atamanenko/) for the awesome Android subsystem reimplementation FalsoNDK and FalsoJNI.
-- [Standard-Republic](https://github.com/Rocroverss) for the Livearea assets.
+- Standard-Republic for the Livearea assets.
