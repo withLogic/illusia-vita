@@ -23,46 +23,37 @@ static jobject stub_bytearray(jmethodID id, va_list args) {
 
 static jobject readAssete_impl(jmethodID id, va_list args) {
     jstring jstr = va_arg(args, jstring);
-
     const char* filename = GetStringUTFChars(NULL, jstr, NULL);
-    if (!filename) {
-        return NULL;
-    }
-
-    sceClibPrintf("[readAssete] INFO: Asset open : %s\n", filename);
+    if (!filename) return NULL;
 
     AAsset* asset = AAssetManager_open(NULL, filename, AASSET_MODE_BUFFER);
-    if (!asset) {
-        ReleaseStringUTFChars(NULL, jstr, filename);
-        return NULL;
-    }
+    if (!asset) { ReleaseStringUTFChars(NULL, jstr, filename); return NULL; }
 
     int length = AAsset_getLength(asset);
-    
     if (length <= 0) {
         AAsset_close(asset);
         ReleaseStringUTFChars(NULL, jstr, filename);
         return NULL;
     }
-
-    jbyteArray jarr = NewByteArray(NULL, length);
-    if (!jarr) {
+    uint8_t *raw = (uint8_t *)malloc(16 + length);
+    if (!raw) {
         AAsset_close(asset);
         ReleaseStringUTFChars(NULL, jstr, filename);
         return NULL;
     }
+    memset(raw, 0, 16);
 
-    void* buffer = malloc(length);
-    if (buffer) {
-        AAsset_read(asset, buffer, length);
-        SetByteArrayRegion(NULL, jarr, 0, length, (jbyte*)buffer);
-        free(buffer);
+    int actuallyRead = AAsset_read(asset, raw + 16, length);
+    if (actuallyRead != length) {
+        sceClibPrintf("[readAssete] WARNING: short read (%d/%d) for %s\n", actuallyRead, length, filename);
+        if (actuallyRead > 0 && actuallyRead < length)
+            memset(raw + 16 + actuallyRead, 0, length - actuallyRead);
     }
 
     AAsset_close(asset);
     ReleaseStringUTFChars(NULL, jstr, filename);
 
-    return (jobject)jarr;
+    return (jobject)raw;
 }
 
 static jint isAssetExist_impl(jmethodID id, va_list args) {
@@ -95,23 +86,23 @@ static jint isAssetExist_impl(jmethodID id, va_list args) {
 static void OnSoundPlay_impl(jmethodID id, va_list args) {
     (void)id;
 
-    return;
-
     jint sndID   = va_arg(args, jint);
     jint vol     = va_arg(args, jint);
     jboolean isLoop = (jboolean)va_arg(args, jint);
 
     char filepath[256];
+
+    sceClibPrintf("[OnSoundPlay] playing a sound %d, %d, %d\n", sndID, vol, isLoop);
     audio_play_sound(sndID, vol, isLoop);
+    sceClibPrintf("[OnSoundPlay] Done\n");
 }
 
 static void OnStopSound_imp(jmethodID id, va_list args) {
     (void)id;
 
-        return;
-
     sceClibPrintf("[OnStopSound] Stopping all sounds\n");
     audio_stop_sound();
+    sceClibPrintf("[OnStopSound] Done\n");
 }
 
 static int SetSpeed_imp(jmethodID id, va_list args) {

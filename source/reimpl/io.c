@@ -127,11 +127,7 @@ int stat_soloader(const char * path, stat64_bionic * buf) {
         return 0;
     }
 
-    if(strstr(path, "Save")){
-        snprintf(new_path, sizeof(new_path), "%s%s", "ux0:/data/illusia", path + 1);
-    } else {
-        snprintf(new_path, sizeof(new_path), "%s", path);
-    }
+    snprintf(new_path, sizeof(new_path), "%s", path);
 
     struct stat st;
     int res = stat(new_path, &st);

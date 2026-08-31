@@ -140,6 +140,8 @@ void poll_pad() {
     for (int i = 0; i < sizeof(mapping) / sizeof(ButtonMapping); i++) {
         if (pressed_buttons & mapping[i].sce_button) {
             controls_handler_key(mapping[i].android_button, CONTROLS_ACTION_DOWN);
+        } else if (current_buttons & mapping[i].sce_button) {
+            controls_handler_key(mapping[i].android_button, CONTROLS_ACTION_MOVE);
         }
         if (released_buttons & mapping[i].sce_button) {
             controls_handler_key(mapping[i].android_button, CONTROLS_ACTION_UP);
